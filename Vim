@@ -1,0 +1,300 @@
+package vim;
+
+import javax.swing.*;
+import javax.swing.text.BadLocationException;
+import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.TimerTask;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.Timer;
+
+
+public class Vim {
+    public static void main(String[] args) {
+        new MyFrame();
+    }
+}
+
+class MyFrame extends JFrame {
+
+    public MyFrame() {
+
+        //创建文本文件，保存内容
+        File file = new File("test.txt");
+        if(!file.exists()){
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+
+        //创建文本文件，备份test内容
+        File filesave = new File("test.txt");
+        if(!filesave.exists()) {
+            try {
+                filesave.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+
+        //设置界面，包括文本域和文本框
+        Container container = this.getContentPane();
+        JTextArea textArea = new JTextArea(10, 20);
+        JTextField textField = new JTextField("NORMAL");
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        final String res = ReadFile();
+        ArrayList<Integer> string = new ArrayList<>(100);
+        string.add(0);
+
+        textArea.setLineWrap(true);
+        textArea.setEditable(false);
+        textArea.setText(res);
+        textArea.getCaret().setVisible(true);
+        textArea.select(textArea.getText().length(),0);
+        scrollPane.setBounds(30, 30, 100, 200);
+        textField.setSize(10, 10);
+        textField.setEditable(false);
+
+        container.setLayout(new BorderLayout());
+        container.add(scrollPane);
+        container.add(textField, BorderLayout.SOUTH);
+        this.pack();
+        this.setTitle("vimTest");
+        this.setVisible(true);
+        this.setBounds(400, 150, 600, 400);
+        this.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+
+        
+        //定时备份
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                String s = ReadFile();
+                try {
+                    FileOutputStream fos = new FileOutputStream("testsave.txt");
+                    fos.write(s.getBytes());
+                    fos.close();
+                } catch (Exception e1) {
+                    e1.printStackTrace();
+                }
+            }
+        };
+        Timer timer = new Timer();
+        long delay = 0;
+        long intevalPeriod = 1 * 1000;
+        timer.scheduleAtFixedRate(task,delay,intevalPeriod);
+
+
+
+        //文本域监听
+        textArea.addKeyListener(new KeyAdapter() {
+            String clipBold = "";
+
+            @Override
+            public void keyPressed(KeyEvent e) {
+                string.add(e.getKeyCode());
+                //进入编辑模式
+                if (e.getKeyCode() == 73) {
+                    textField.setText("INSERT");
+                    textArea.setEditable(true);
+                }
+                //进入命令模式
+                if (e.getKeyChar() == ':' || e.getKeyChar() == '：') {
+                    textField.setEditable(true);
+                    textField.setText(":");
+                    textField.requestFocus();
+                }
+                //进入普通模式
+                if (e.getKeyChar() == KeyEvent.VK_ESCAPE) {
+                    textField.setText("NORMAL");
+                    textArea.setEditable(false);
+                    textField.setEditable(false);
+                    textArea.getCaret().setVisible(true);
+                    textArea.select(textArea.getText().length(),0);
+
+                }
+                //普通模式
+                if ((!textArea.isEditable()) && !textField.isEditable()) {
+                    //光标上下左右移动
+                    if(e.getKeyCode() == 72){
+                        try {
+                            Robot robot = new Robot();
+                            robot.keyPress(KeyEvent.VK_LEFT);
+                        } catch (AWTException awtException) {
+                            awtException.printStackTrace();
+                        }
+                    }
+                    if(e.getKeyCode() == 74){
+                        try {
+                            Robot robot = new Robot();
+                            robot.keyPress(KeyEvent.VK_UP);
+                        } catch (AWTException awtException) {
+                            awtException.printStackTrace();
+                        }
+                    }
+                    //K键光标下移
+                    if(e.getKeyCode() == 75){
+                        try {
+                            Robot robot = new Robot();
+                            robot.keyPress(KeyEvent.VK_DOWN);
+                        } catch (AWTException awtException) {
+                            awtException.printStackTrace();
+                        }
+                    }
+                    //L键光标右移
+                    if(e.getKeyCode() == 76){
+                        try {
+                            Robot robot = new Robot();
+                            robot.keyPress(KeyEvent.VK_RIGHT);
+                        } catch (AWTException awtException) {
+                            awtException.printStackTrace();
+                        }
+                    }
+                    //进入匹配
+                    if(e.getKeyCode() == 47) {
+                        textField.setText("/");
+                        textArea.setEditable(false);
+                        textField.setEditable(true);
+                        textField.requestFocus();
+                    }
+                    //dd删除一行
+                    if(e.getKeyCode() == 68 && string.get(string.size()-2) == 68) {
+                        try {
+                            int line = textArea.getLineOfOffset(textArea.getCaretPosition());
+                            int start = textArea.getLineStartOffset(line);
+                            int end = textArea.getLineEndOffset(line);
+                            String str = "";
+                            textArea.replaceRange(str,start,end);
+                        } catch (BadLocationException badLocationException) {
+                            badLocationException.printStackTrace();
+                        }
+                    }
+                    //yy复制一行
+                    if (e.getKeyCode() == 89 && string.get(string.size()-2) == 89) {
+                        try {
+                            int start = textArea.getLineStartOffset(textArea.getLineOfOffset(textArea.getCaretPosition()));
+                            int end = textArea.getLineEndOffset(textArea.getLineOfOffset(textArea.getCaretPosition()));
+                            clipBold = textArea.getText(start,end-start);
+                        } catch (BadLocationException badLocationException) {
+                            badLocationException.printStackTrace();
+                        }
+                    }
+                    //p复制
+                    if(e.getKeyCode() == 80) {
+                        textArea.insert(clipBold,textArea.getCaretPosition());
+                    }
+                }
+            }
+        });
+
+
+        //文本框监听
+        textField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                ArrayList<String> strings = new ArrayList<>();
+                String text = textField.getText();
+                //进入普通模式
+                if (e.getKeyChar() == KeyEvent.VK_ESCAPE) {
+                    textArea.requestFocus();
+                    textField.setText("NORMAL");
+                    textArea.setEditable(false);
+                    textField.setEditable(false);
+                    textArea.getCaret().setVisible(true);
+                    textArea.select(textArea.getText().length(),0);
+
+                }
+                //未做修改时退出
+                if (text.equals(":q") && e.getKeyCode()== 10) {
+                    String newer = textArea.getText();
+                    if(newer.equals(res)){
+                        System.exit(0);
+                    }
+                    else {
+                        JOptionPane.showMessageDialog(null,"not saved");
+                    }
+                }
+                //保存但不退出
+                if (text.equals(":w") && e.getKeyCode()== 10) {
+                    String res = textArea.getText();
+                    SaveFile(res);
+                }
+                //保存并退出
+                if (text.equals(":x") && e.getKeyCode()== 10) {
+                    String res = textArea.getText();
+                    SaveFile(res);
+                    System.exit(0);
+                }
+                //放弃修改并退出
+                if (text.equals(":q!") && e.getKeyCode()== 10) {
+                    System.exit(0);
+                }
+                //匹配
+                if (text.startsWith("/") && e.getKeyCode()== 10) {
+                    String string = text.substring(1);
+                    String text1 = textArea.getText();
+                    Pattern p = Pattern.compile(string);
+                    Matcher m = p.matcher(text1);
+                    while(m.find()){
+                        try {
+                            strings.add("(" + (textArea.getLineOfOffset(m.start())+1) + "," + ((m.start() - textArea.getLineStartOffset(textArea.getLineOfOffset(m.start())))+1) + ")");
+                        } catch (BadLocationException badLocationException) {
+                            badLocationException.printStackTrace();
+                        }
+                        textField.setText(strings + "");
+                    }
+                }
+                //匹配替换
+                if (text.startsWith(":%s/") && e.getKeyCode()== 10) {
+                    String string = text.substring(4);
+                    String foo = string.substring(0,string.indexOf('/'));
+                    String fool = string.substring(string.indexOf('/') + 1);
+                    Pattern p = Pattern.compile(foo);
+                    Matcher m = p.matcher(textArea.getText());
+                    while(m.find()){
+                        textArea.replaceRange(fool,m.start(),m.end());
+                        textField.setText("替换成功");
+                    }
+                }
+            }
+        });
+    }
+
+
+    //读取文件内容
+    private String ReadFile() {
+        String reuse = "";
+        try {
+            FileInputStream fis = new FileInputStream("test.txt");
+            byte[] b = new byte[1024];
+            int count = 0;
+            while ((count = fis.read(b)) != -1) {
+                reuse = reuse + new String(b, 0, count);
+            }
+            fis.close();
+
+        } catch (Exception e1) {
+            e1.printStackTrace();
+        }
+        return reuse;
+    }
+
+    //保存文件内容
+    public void SaveFile(String res) {
+        try {
+            FileOutputStream fos = new FileOutputStream("test.txt");
+            fos.write(res.getBytes());
+            fos.close();
+        } catch (Exception e1) {
+            e1.printStackTrace();
+        }
+    }
+}
